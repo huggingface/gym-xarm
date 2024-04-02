@@ -4,11 +4,11 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit
 
-from xarm.tasks.base import Base as Base
-from xarm.tasks.lift import Lift
-from xarm.tasks.peg_in_box import PegInBox
-from xarm.tasks.push import Push
-from xarm.tasks.reach import Reach
+from gym_xarm.tasks.base import Base as Base
+from gym_xarm.tasks.lift import Lift
+from gym_xarm.tasks.peg_in_box import PegInBox
+from gym_xarm.tasks.push import Push
+from gym_xarm.tasks.reach import Reach
 
 TASKS = OrderedDict(
     (

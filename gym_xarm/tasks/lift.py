@@ -1,6 +1,6 @@
 import numpy as np
 
-from xarm.tasks import Base
+from gym_xarm.tasks import Base
 
 
 class Lift(Base):

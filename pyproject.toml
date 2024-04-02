@@ -18,7 +18,7 @@ classifiers=[
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.10",
 ]
-packages = [{include = "xarm"}]
+packages = [{include = "gym_xarm"}]
 
 
 [tool.poetry.dependencies]

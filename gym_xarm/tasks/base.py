@@ -4,7 +4,7 @@ import mujoco
 import numpy as np
 from gymnasium_robotics.envs import robot_env
 
-from xarm.tasks import mocap
+from gym_xarm.tasks import mocap
 
 
 class Base(robot_env.MujocoRobotEnv):
