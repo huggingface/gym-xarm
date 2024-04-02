@@ -15,19 +15,33 @@ class Base(robot_env.MujocoRobotEnv):
             gripper_rotation (list): initial rotation of the gripper (given as a quaternion)
     """
 
-    def __init__(self, xml_name, gripper_rotation=None):
+    def __init__(
+        self,
+        xml_name,
+        gripper_rotation=None,
+        observation_width=84,
+        observation_height=84,
+        visualization_width=None,
+        visualization_height=None,
+    ):
         if gripper_rotation is None:
             gripper_rotation = [0, 1, 0, 0]
         self.gripper_rotation = np.array(gripper_rotation, dtype=np.float32)
         self.center_of_table = np.array([1.655, 0.3, 0.63625])
         self.max_z = 1.2
         self.min_z = 0.2
+
         super().__init__(
-            model_path=os.path.join(os.path.dirname(__file__), "assets", xml_name + ".xml"),
+            model_path=os.path.join(os.path.dirname(__file__), "assets", f"{xml_name}.xml"),
             n_substeps=20,
             n_actions=4,
             initial_qpos={},
+            width=observation_width,
+            height=observation_height,
         )
+
+        if visualization_width is not None and visualization_height is not None:
+            self._set_custom_size_renderer(width=visualization_width, height=visualization_height)
 
     @property
     def dt(self):
@@ -133,12 +147,29 @@ class Base(robot_env.MujocoRobotEnv):
         info = {"is_success": self.is_success(), "success": self.is_success()}
         return obs, reward, done, info
 
-    def render(self, mode="rgb_array", width=384, height=384):
+    def render(self, mode="rgb_array"):
         self._render_callback()
-        # HACK
-        self.model.vis.global_.offwidth = width
-        self.model.vis.global_.offheight = height
+        if mode == "visualize":
+            return self._custom_size_render()
+
         return self.mujoco_renderer.render(mode, camera_name="camera0")
+
+    def _set_custom_size_renderer(self, width, height):
+        from copy import deepcopy
+
+        from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
+
+        # HACK: MujoCo doesn't allow for custom size rendering on-the-fly, so we
+        # initialize another renderer with appropriate size for visualization purposes
+        # see https://gymnasium.farama.org/content/migration-guide/#environment-render
+        custom_render_model = deepcopy(self.model)
+        custom_render_model.vis.global_.offwidth = width
+        custom_render_model.vis.global_.offheight = height
+        self.custom_size_renderer = MujocoRenderer(custom_render_model, self.data)
+        del custom_render_model
+
+    def _custom_size_render(self):
+        return self.custom_size_renderer.render("rgb_array", camera_name="camera0")
 
     def close(self):
         if self.mujoco_renderer is not None:
