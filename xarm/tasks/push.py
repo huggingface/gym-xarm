@@ -1,6 +1,6 @@
 import numpy as np
 
-from xarm import Base
+from xarm.tasks import Base
 
 
 class Push(Base):

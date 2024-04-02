@@ -1,12 +1,12 @@
 import numpy as np
 
-from xarm import Base
+from xarm.tasks import Base
 
 
 class Lift(Base):
-    def __init__(self):
+    def __init__(self, **kwargs):
         self._z_threshold = 0.15
-        super().__init__("lift")
+        super().__init__("lift", **kwargs)
 
     @property
     def z_target(self):
