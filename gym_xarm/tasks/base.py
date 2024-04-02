@@ -23,6 +23,7 @@ class Base(robot_env.MujocoRobotEnv):
         observation_height=84,
         visualization_width=None,
         visualization_height=None,
+        render_mode=None,
     ):
         if gripper_rotation is None:
             gripper_rotation = [0, 1, 0, 0]
@@ -30,6 +31,7 @@ class Base(robot_env.MujocoRobotEnv):
         self.center_of_table = np.array([1.655, 0.3, 0.63625])
         self.max_z = 1.2
         self.min_z = 0.2
+        self.render_mode = render_mode
 
         super().__init__(
             model_path=os.path.join(os.path.dirname(__file__), "assets", f"{xml_name}.xml"),
