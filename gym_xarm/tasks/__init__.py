@@ -54,6 +54,8 @@ TASKS = OrderedDict(
 
 class SimXarmWrapper(gym.Wrapper):
     """
+    DEPRECATED: Use gym.make()
+
     A wrapper for the SimXarm environments. This wrapper is used to
     convert the action and observation spaces to the correct format.
     """
@@ -139,6 +141,8 @@ class SimXarmWrapper(gym.Wrapper):
 
 def make(task, obs_mode="state", image_size=84, action_repeat=1, frame_stack=1, channel_last=False, seed=0):
     """
+    DEPRECATED: Use gym.make()
+
     Create a new environment.
     Args:
             task (str): The task to create an environment for. Must be one of:

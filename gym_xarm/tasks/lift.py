@@ -4,6 +4,13 @@ from gym_xarm.tasks import Base
 
 
 class Lift(Base):
+    metadata = {
+        **Base.metadata,
+        "action_space": "xyzw",
+        "episode_length": 50,
+        "description": "Lift a cube above a height threshold",
+    }
+
     def __init__(self, **kwargs):
         self._z_threshold = 0.15
         super().__init__("lift", **kwargs)
@@ -91,9 +98,9 @@ class Lift(Base):
         # Goal
         return object_pos + np.array([0, 0, self._z_threshold])
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
         self._action = np.zeros(4)
-        return super().reset()
+        return super().reset(seed, options)
 
     def step(self, action):
         self._action = action.copy()
