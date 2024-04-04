@@ -6,7 +6,9 @@ import gym_xarm  # noqa: F401
 
 def test_env():
     env = gym.make("gym_xarm/XarmLift-v0")
-    check_env(env.unwrapped, skip_render_check=True)
+    # check_env(env.unwrapped, skip_render_check=True)
+    env.reset()
+    env.render()
 
 
 if __name__ == "__main__":

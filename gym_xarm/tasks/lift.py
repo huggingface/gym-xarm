@@ -48,6 +48,13 @@ class Lift(Base):
         return reach_reward / 100 + pick_reward
 
     def _get_obs(self):
+        # WIP
+        if self.obs_type == "state":
+            obs = self._get_state_obs()
+        elif self.obs_type == "pixels":
+            obs = self._get_pixels_obs()
+
+    def _get_state_obs(self):
         eef_velp = self._utils.get_site_xvelp(self.model, self.data, "grasp") * self.dt
         gripper_angle = self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
         eef = self.eef - self.center_of_table
@@ -57,7 +64,7 @@ class Lift(Base):
         obj_velp = self._utils.get_site_xvelp(self.model, self.data, "object_site") * self.dt
         obj_velr = self._utils.get_site_xvelr(self.model, self.data, "object_site") * self.dt
 
-        obs = np.concatenate(
+        return np.concatenate(
             [
                 eef,
                 eef_velp,
@@ -79,7 +86,7 @@ class Lift(Base):
             ],
             axis=0,
         )
-        return {"observation": obs, "state": eef, "achieved_goal": eef, "desired_goal": eef}
+        # return {"observation": obs, "state": eef, "achieved_goal": eef, "desired_goal": eef}
 
     def _sample_goal(self):
         # Gripper
@@ -100,7 +107,7 @@ class Lift(Base):
 
     def reset(self, seed=None, options=None):
         self._action = np.zeros(4)
-        return super().reset(seed, options)
+        return super().reset(seed=seed, options=options)
 
     def step(self, action):
         self._action = action.copy()
