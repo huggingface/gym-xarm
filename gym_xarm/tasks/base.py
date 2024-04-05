@@ -19,10 +19,7 @@ class Base(gym.Env):
     """
 
     metadata = {
-        "render_modes": [
-            "human",
-            "rgb_array",
-        ],
+        "render_modes": [],
         "render_fps": 25,
     }
     n_substeps = 20
@@ -39,7 +36,6 @@ class Base(gym.Env):
         observation_height=84,
         visualization_width=680,
         visualization_height=680,
-        render_mode=None,
         frame_stack=1,
         channel_last=True,
     ):
@@ -60,7 +56,6 @@ class Base(gym.Env):
         self.observation_height = observation_height
         self.visualization_width = visualization_width
         self.visualization_height = visualization_height
-        self.render_mode = render_mode
         self.frame_stack = frame_stack
         self._frames = deque([], maxlen=frame_stack)
 
@@ -121,9 +116,9 @@ class Base(gym.Env):
 
     def _initialize_observation_space(self):
         image_shape = (
-            (self.observation_width, self.observation_height, 3 * self.frame_stack)
+            (self.observation_height, self.observation_width, 3 * self.frame_stack)
             if self.channel_last
-            else (3 * self.frame_stack, self.observation_width, self.observation_height)
+            else (3 * self.frame_stack, self.observation_height, self.observation_width)
         )
         obs = self.get_obs()
         if self.obs_type == "state":
@@ -223,8 +218,6 @@ class Base(gym.Env):
         while not did_reset_sim:
             did_reset_sim = self._reset_sim()
         observation = self.get_obs()
-        if self.render_mode == "human":
-            self.render()
         info = {}
         return observation, info
 
@@ -259,12 +252,13 @@ class Base(gym.Env):
         self._mujoco.mj_step(self.model, self.data, nstep=2)
         self._step_callback()
         observation = self.get_obs()
-        # observation = self.get_obs()
         # observation = self._transform_obs(observation)
         reward = self.get_reward()
-        done = False
-        info = {"is_success": self.is_success(), "success": self.is_success()}
-        return observation, reward, done, info
+        terminated = is_success = self.is_success()
+        info = {"is_success": is_success}
+
+        truncated = False
+        return observation, reward, terminated, truncated, info
 
     def _step_callback(self):
         self._mujoco.mj_forward(self.model, self.data)
@@ -348,9 +342,9 @@ class Base(gym.Env):
 
         render = self.observation_renderer.render("rgb_array", camera_name="camera0")
         if self.channel_last:
-            return render
+            return render.copy()
         else:
-            return render.transpose(2, 0, 1)
+            return render.transpose(2, 0, 1).copy()
 
     def _render_callback(self):
         self._mujoco.mj_forward(self.model, self.data)

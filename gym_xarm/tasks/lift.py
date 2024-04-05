@@ -89,7 +89,6 @@ class Lift(Base):
             return np.concatenate(
                 [
                     eef,
-                    self.eef_velp,
                     self.gripper_angle,
                 ]
             )
