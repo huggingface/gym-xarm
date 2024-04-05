@@ -1,5 +1,5 @@
 import os
-from collections import OrderedDict, deque
+from collections import deque
 
 import gymnasium as gym
 import mujoco
@@ -41,7 +41,7 @@ class Base(gym.Env):
         visualization_height=680,
         render_mode=None,
         frame_stack=1,
-        channel_last=False,
+        channel_last=True,
     ):
         # Env setup
         if gripper_rotation is None:
@@ -69,6 +69,7 @@ class Base(gym.Env):
         if not os.path.exists(self.xml_path):
             raise OSError(f"File {self.xml_path} does not exist")
 
+        # Initialize sim, spaces & renderers
         self._initialize_simulation()
         self.observation_space = self._initialize_observation_space()
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(len(self.metadata["action_space"]),))
@@ -81,6 +82,9 @@ class Base(gym.Env):
         if "w" not in self.metadata["action_space"]:
             self.action_padding[-1] = 1.0
 
+        self.observation_renderer = self._initialize_renderer(type="observation")
+        self.visualization_renderer = self._initialize_renderer(type="visualization")
+
         # super().__init__(
         #     xml_path = os.path.join(os.path.dirname(__file__), "assets", f"{task}.xml"),
         #     n_substeps=20,
@@ -90,12 +94,9 @@ class Base(gym.Env):
         #     height=image_size,
         # )
 
-        self.observation_renderer = self._initialize_renderer(type="observation")
-        self.visualization_renderer = self._initialize_renderer(type="visualization")
-
     def _initialize_simulation(self):
         """Initialize MuJoCo simulation data structures mjModel and mjData."""
-        self.model = self._mujoco.MjModel.from_xml_path(self.fullpath)
+        self.model = self._mujoco.MjModel.from_xml_path(self.xml_path)
         self.data = self._mujoco.MjData(self.model)
         self._model_names = self._utils.MujocoModelNames(self.model)
 
@@ -121,9 +122,9 @@ class Base(gym.Env):
 
     def _initialize_observation_space(self):
         image_shape = (
-            (self.image_size, self.image_size, 3 * self.frame_stack)
+            (self.observation_width, self.observation_height, 3 * self.frame_stack)
             if self.channel_last
-            else (3 * self.frame_stack, self.image_size, self.image_size)
+            else (3 * self.frame_stack, self.observation_width, self.observation_height)
         )
         if self.obs_type == "state":
             obs = self._get_obs()
@@ -159,22 +160,6 @@ class Base(gym.Env):
 
         return MujocoRenderer(model, self.data)
 
-    def _reset_sim(self):
-        """Resets a simulation and indicates whether or not it was successful.
-
-        If a reset was unsuccessful (e.g. if a randomized state caused an error in the
-        simulation), this method should indicate such a failure by returning False.
-        In such a case, this method will be called again to attempt a the reset again.
-        """
-        self.data.time = self.initial_time
-        self.data.qpos[:] = np.copy(self.initial_qpos)
-        self.data.qvel[:] = np.copy(self.initial_qvel)
-        if self.model.na != 0:
-            self.data.act[:] = None
-
-        mujoco.mj_forward(self.model, self.data)
-        return True
-
     @property
     def dt(self):
         """Return the timestep of each Gymanisum step."""
@@ -205,7 +190,77 @@ class Base(gym.Env):
         raise NotImplementedError()
 
     def get_obs(self):
-        return self._get_obs()
+        raise NotImplementedError()
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+    ):
+        """Reset MuJoCo simulation to initial state.
+
+        Note: Attempt to reset the simulator. Since we randomize initial conditions, it
+        is possible to get into a state with numerical issues (e.g. due to penetration or
+        Gimbel lock) or we may not achieve an initial condition (e.g. an object is within the hand).
+        In this case, we just keep randomizing until we eventually achieve a valid initial
+        configuration.
+
+        Args:
+            seed (optional integer): The seed that is used to initialize the environment's PRNG (`np_random`). Defaults to None.
+            options (optional dictionary): Can be used when `reset` is override for additional information to specify how the environment is reset.
+
+        Returns:
+            observation (dictionary) : Observation of the initial state. It should satisfy the `GoalEnv` :attr:`observation_space`.
+            info (dictionary): This dictionary contains auxiliary information complementing ``observation``. It should be analogous to
+                the ``info`` returned by :meth:`step`.
+        """
+        super().reset(seed=seed)
+        did_reset_sim = False
+        while not did_reset_sim:
+            did_reset_sim = self._reset_sim()
+        observation = self._get_obs()
+        if self.render_mode == "human":
+            self.render()
+        info = {}
+        return observation, info
+
+    def _reset_sim(self):
+        """Resets a simulation and indicates whether or not it was successful.
+
+        If a reset was unsuccessful (e.g. if a randomized state caused an error in the
+        simulation), this method should indicate such a failure by returning False.
+        In such a case, this method will be called again to attempt a the reset again.
+        """
+        self.data.time = self.initial_time
+        self.data.qpos[:] = np.copy(self.initial_qpos)
+        self.data.qvel[:] = np.copy(self.initial_qvel)
+        if self.model.na != 0:
+            self.data.act[:] = None
+
+        mujoco.mj_forward(self.model, self.data)
+        return True
+
+    # def reset(self, seed=None, options=None):
+    #     super().reset(seed=seed, options=options)
+    #     self._reset_sim()
+    #     observation = self._get_obs()
+    #     observation = self._transform_obs(observation)
+    #     info = {}
+    #     return observation, info
+
+    def step(self, action):
+        assert action.shape == (4,)
+        assert self.action_space.contains(action), f"{action!r} ({type(action)}) invalid"
+        self._apply_action(action)
+        self._mujoco.mj_step(self.model, self.data, nstep=2)
+        self._step_callback()
+        observation = self.get_obs()
+        # observation = self.get_obs()
+        # observation = self._transform_obs(observation)
+        reward = self.get_reward()
+        done = False
+        info = {"is_success": self.is_success(), "success": self.is_success()}
+        return observation, reward, done, info
 
     def _step_callback(self):
         self._mujoco.mj_forward(self.model, self.data)
@@ -254,99 +309,47 @@ class Base(gym.Env):
         self.data.qpos[10] = 0.0
         self.data.qpos[12] = 0.0
 
-    def reset(
-        self,
-        *,
-        seed: int | None = None,
-        options: dict | None = None,
-    ):
-        """Reset MuJoCo simulation to initial state.
+    # def _transform_obs(self, obs, reset=False):
+    #     if self.obs_type == "state":
+    #         return obs["observation"]
+    #     elif self.obs_type == "rgb":
+    #         self._update_frames(reset=reset)
+    #         rgb_obs = np.concatenate(list(self._frames), axis=-1 if self.channel_last else 0)
+    #         return rgb_obs
+    #     elif self.obs_type == "all":
+    #         self._update_frames(reset=reset)
+    #         rgb_obs = np.concatenate(list(self._frames), axis=-1 if self.channel_last else 0)
+    #         return OrderedDict((("rgb", rgb_obs), ("state", self.robot_state)))
+    #     else:
+    #         raise ValueError(f"Unknown obs_type {self.obs_type}. Must be one of [rgb, all, state]")
 
-        Note: Attempt to reset the simulator. Since we randomize initial conditions, it
-        is possible to get into a state with numerical issues (e.g. due to penetration or
-        Gimbel lock) or we may not achieve an initial condition (e.g. an object is within the hand).
-        In this case, we just keep randomizing until we eventually achieve a valid initial
-        configuration.
+    # def _update_frames(self, reset=False):
+    #     pixels = self._render_obs()
+    #     self._frames.append(pixels)
+    #     if reset:
+    #         for _ in range(1, self.frame_stack):
+    #             self._frames.append(pixels)
+    #     assert len(self._frames) == self.frame_stack
 
-        Args:
-            seed (optional integer): The seed that is used to initialize the environment's PRNG (`np_random`). Defaults to None.
-            options (optional dictionary): Can be used when `reset` is override for additional information to specify how the environment is reset.
-
-        Returns:
-            observation (dictionary) : Observation of the initial state. It should satisfy the `GoalEnv` :attr:`observation_space`.
-            info (dictionary): This dictionary contains auxiliary information complementing ``observation``. It should be analogous to
-                the ``info`` returned by :meth:`step`.
-        """
-        super().reset(seed=seed)
-        did_reset_sim = False
-        while not did_reset_sim:
-            did_reset_sim = self._reset_sim()
-        observation = self._get_obs()
-        if self.render_mode == "human":
-            self.render()
-        info = {}
-        return observation, info
-
-    # def reset(self, seed=None, options=None):
-    #     super().reset(seed=seed, options=options)
-    #     self._reset_sim()
-    #     observation = self._get_obs()
-    #     observation = self._transform_obs(observation)
-    #     info = {}
-    #     return observation, info
-
-    def step(self, action):
-        assert action.shape == (4,)
-        assert self.action_space.contains(action), "{!r} ({}) invalid".format(action, type(action))
-        self._apply_action(action)
-        self._mujoco.mj_step(self.model, self.data, nstep=2)
-        self._step_callback()
-        observation = self._get_obs()
-        observation = self._transform_obs(observation)
-        reward = self.get_reward()
-        done = False
-        info = {"is_success": self.is_success(), "success": self.is_success()}
-        return observation, reward, done, info
-
-    def _transform_obs(self, obs, reset=False):
-        if self.obs_type == "state":
-            return obs["observation"]
-        elif self.obs_type == "rgb":
-            self._update_frames(reset=reset)
-            rgb_obs = np.concatenate(list(self._frames), axis=-1 if self.channel_last else 0)
-            return rgb_obs
-        elif self.obs_type == "all":
-            self._update_frames(reset=reset)
-            rgb_obs = np.concatenate(list(self._frames), axis=-1 if self.channel_last else 0)
-            return OrderedDict((("rgb", rgb_obs), ("state", self.robot_state)))
-        else:
-            raise ValueError(f"Unknown obs_type {self.obs_type}. Must be one of [rgb, all, state]")
-
-    def _render_callback(self):
-        self._mujoco.mj_forward(self.model, self.data)
-
-    def _update_frames(self, reset=False):
-        pixels = self._render_obs()
-        self._frames.append(pixels)
-        if reset:
-            for _ in range(1, self.frame_stack):
-                self._frames.append(pixels)
-        assert len(self._frames) == self.frame_stack
-
-    def _render_obs(self):
-        obs = self.render(mode="rgb_array")
-        if not self.channel_last:
-            obs = obs.transpose(2, 0, 1)
-        return obs.copy()
+    # def _render_obs(self):
+    #     obs = self.render(mode="rgb_array")
+    #     if not self.channel_last:
+    #         obs = obs.transpose(2, 0, 1)
+    #     return obs.copy()
 
     def render(self, mode="rgb_array"):
         self._render_callback()
-        # return self._mujoco.physics.render(height=84, width=84, camera_name="camera0")
-
         if mode == "visualize":
             return self.visualization_renderer.render("rgb_array", camera_name="camera0")
 
-        return self.observation_renderer.render(mode, camera_name="camera0")
+        render = self.observation_renderer.render("rgb_array", camera_name="camera0")
+        if self.channel_last:
+            return render
+        else:
+            return render.transpose(2, 0, 1)
+
+    def _render_callback(self):
+        self._mujoco.mj_forward(self.model, self.data)
 
     def close(self):
         """Close contains the code necessary to "clean up" the environment.
@@ -355,3 +358,5 @@ class Base(gym.Env):
         """
         if self.observation_renderer is not None:
             self.observation_renderer.close()
+        if self.visualization_renderer is not None:
+            self.visualization_renderer.close()

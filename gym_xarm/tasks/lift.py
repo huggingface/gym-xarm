@@ -19,6 +19,26 @@ class Lift(Base):
     def z_target(self):
         return self._init_z + self._z_threshold
 
+    @property
+    def eef_velp(self):
+        return self._utils.get_site_xvelp(self.model, self.data, "grasp") * self.dt
+
+    @property
+    def obj_rot(self):
+        return self._utils.get_joint_qpos(self.model, self.data, "object_joint0")[-4:]
+
+    @property
+    def obj_velp(self):
+        return self._utils.get_site_xvelp(self.model, self.data, "object_site") * self.dt
+
+    @property
+    def obj_velr(self):
+        return self._utils.get_site_xvelr(self.model, self.data, "object_site") * self.dt
+
+    @property
+    def gripper_angle(self):
+        return self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
+
     def is_success(self):
         return self.obj[2] >= self.z_target
 
@@ -47,46 +67,56 @@ class Lift(Base):
 
         return reach_reward / 100 + pick_reward
 
-    def _get_obs(self):
-        # WIP
+    def get_obs(self):
         if self.obs_type == "state":
-            obs = self._get_state_obs()
-        elif self.obs_type == "pixels":
-            obs = self._get_pixels_obs()
+            return self._get_obs()
+        pixels = self.render()
+        if self.obs_type == "pixels":
+            return pixels
+        elif self.obs_type == "pixels_agent_pos":
+            return {
+                "pixels": pixels,
+                "agent_pos": self._get_obs(agent_only=True),
+            }
+        else:
+            raise ValueError(
+                f"Unknown obs_type {self.obs_type}. Must be one of [pixels, state, pixels_agent_pos]"
+            )
 
-    def _get_state_obs(self):
-        eef_velp = self._utils.get_site_xvelp(self.model, self.data, "grasp") * self.dt
-        gripper_angle = self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
+    def _get_obs(self, agent_only=False):
         eef = self.eef - self.center_of_table
+        if agent_only:
+            return np.concatenate(
+                [
+                    eef,
+                    self.eef_velp,
+                    self.gripper_angle,
+                ]
+            )
 
         obj = self.obj - self.center_of_table
-        obj_rot = self._utils.get_joint_qpos(self.model, self.data, "object_joint0")[-4:]
-        obj_velp = self._utils.get_site_xvelp(self.model, self.data, "object_site") * self.dt
-        obj_velr = self._utils.get_site_xvelr(self.model, self.data, "object_site") * self.dt
-
         return np.concatenate(
             [
                 eef,
-                eef_velp,
+                self.eef_velp,
                 obj,
-                obj_rot,
-                obj_velp,
-                obj_velr,
-                eef - obj,
+                self.obj_rot,
+                self.obj_velp,
+                self.obj_velr,
+                self.eef - self.obj,
                 np.array(
                     [
-                        np.linalg.norm(eef - obj),
+                        np.linalg.norm(self.eef - self.obj),
                         np.linalg.norm(eef[:-1] - obj[:-1]),
                         self.z_target,
                         self.z_target - obj[-1],
                         self.z_target - eef[-1],
                     ]
                 ),
-                gripper_angle,
+                self.gripper_angle,
             ],
             axis=0,
         )
-        # return {"observation": obs, "state": eef, "achieved_goal": eef, "desired_goal": eef}
 
     def _sample_goal(self):
         # Gripper
@@ -105,9 +135,9 @@ class Lift(Base):
         # Goal
         return object_pos + np.array([0, 0, self._z_threshold])
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None):
         self._action = np.zeros(4)
-        return super().reset(seed=seed, options=options)
+        return super().reset(seed=seed)
 
     def step(self, action):
         self._action = action.copy()
