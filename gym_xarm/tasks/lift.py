@@ -135,9 +135,13 @@ class Lift(Base):
         # Goal
         return object_pos + np.array([0, 0, self._z_threshold])
 
-    def reset(self, seed=None):
+    def reset(
+        self,
+        seed=None,
+        options: dict | None = None,
+    ):
         self._action = np.zeros(4)
-        return super().reset(seed=seed)
+        return super().reset(seed=seed, options=options)
 
     def step(self, action):
         self._action = action.copy()

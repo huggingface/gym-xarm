@@ -71,6 +71,8 @@ class Base(gym.Env):
 
         # Initialize sim, spaces & renderers
         self._initialize_simulation()
+        self.observation_renderer = self._initialize_renderer(type="observation")
+        self.visualization_renderer = self._initialize_renderer(type="visualization")
         self.observation_space = self._initialize_observation_space()
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(len(self.metadata["action_space"]),))
         self.action_padding = np.zeros(4 - len(self.metadata["action_space"]), dtype=np.float32)
@@ -81,9 +83,6 @@ class Base(gym.Env):
 
         if "w" not in self.metadata["action_space"]:
             self.action_padding[-1] = 1.0
-
-        self.observation_renderer = self._initialize_renderer(type="observation")
-        self.visualization_renderer = self._initialize_renderer(type="visualization")
 
         # super().__init__(
         #     xml_path = os.path.join(os.path.dirname(__file__), "assets", f"{task}.xml"),
@@ -126,15 +125,19 @@ class Base(gym.Env):
             if self.channel_last
             else (3 * self.frame_stack, self.observation_width, self.observation_height)
         )
+        obs = self.get_obs()
         if self.obs_type == "state":
-            obs = self._get_obs()
-            observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype="float64")
+            observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype=np.float64)
         elif self.obs_type == "pixels":
             observation_space = gym.spaces.Box(low=0, high=255, shape=image_shape, dtype=np.uint8)
         elif self.obs_type == "pixels_agent_pos":
             observation_space = gym.spaces.Dict(
-                pixels=gym.spaces.Box(low=0, high=255, shape=image_shape, dtype=np.uint8),
-                agent_pos=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32),
+                {
+                    "pixels": gym.spaces.Box(low=0, high=255, shape=image_shape, dtype=np.uint8),
+                    "agent_pos": gym.spaces.Box(
+                        low=-np.inf, high=np.inf, shape=obs["agent_pos"].shape, dtype=np.float64
+                    ),
+                }
             )
         else:
             raise ValueError(
@@ -196,6 +199,7 @@ class Base(gym.Env):
         self,
         *,
         seed: int | None = None,
+        options: dict | None = None,
     ):
         """Reset MuJoCo simulation to initial state.
 
@@ -218,7 +222,7 @@ class Base(gym.Env):
         did_reset_sim = False
         while not did_reset_sim:
             did_reset_sim = self._reset_sim()
-        observation = self._get_obs()
+        observation = self.get_obs()
         if self.render_mode == "human":
             self.render()
         info = {}
