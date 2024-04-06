@@ -8,6 +8,12 @@ from gymnasium_robotics.utils import mujoco_utils
 
 from gym_xarm.tasks import mocap
 
+RENDER_MODES = ["rgb_array"]
+if os.environ.get("MUJOCO_GL") == "glfw":
+    RENDER_MODES.append("human")
+elif os.environ.get("MUJOCO_GL") not in _ALL_RENDERERS:
+    os.environ["MUJOCO_GL"] = "egl"
+
 
 class Base(gym.Env):
     """
@@ -18,7 +24,7 @@ class Base(gym.Env):
     """
 
     metadata = {
-        "render_modes": ["human", "rgb_array"],
+        "render_modes": RENDER_MODES,
         "render_fps": 25,
     }
     n_substeps = 20
@@ -140,9 +146,6 @@ class Base(gym.Env):
             raise ValueError(
                 f"Unknown render type {render_type}. Must be one of [observation, visualization]"
             )
-
-        if os.environ.get("MUJOCO_GL") not in _ALL_RENDERERS:
-            os.environ["MUJOCO_GL"] = "egl"
 
         return MujocoRenderer(model, self.data)
 
@@ -325,12 +328,14 @@ class Base(gym.Env):
         self._render_callback()
         if render_type == "visualization":
             render = self.visualization_renderer.render(self.render_mode, camera_name="camera0")
+            if self.render_mode != "human":
+                render = render.copy()
         elif render_type == "observation":
-            render = self.observation_renderer.render(self.render_mode, camera_name="camera0")
+            render = self.observation_renderer.render("rgb_array", camera_name="camera0").copy()
         else:
             raise ValueError(render_type)
 
-        return render.copy()
+        return render
 
     def _render_callback(self):
         self._mujoco.mj_forward(self.model, self.data)
