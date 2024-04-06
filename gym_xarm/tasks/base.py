@@ -68,8 +68,8 @@ class Base(gym.Env):
 
         # Initialize sim, spaces & renderers
         self._initialize_simulation()
-        self.observation_renderer = self._initialize_renderer(render_type="observation")
-        self.visualization_renderer = self._initialize_renderer(render_type="visualization")
+        self.observation_renderer = self._initialize_renderer(renderer_type="observation")
+        self.visualization_renderer = self._initialize_renderer(renderer_type="visualization")
         self.observation_space = self._initialize_observation_space()
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(len(self.metadata["action_space"]),))
         self.action_padding = np.zeros(4 - len(self.metadata["action_space"]), dtype=np.float32)
@@ -130,10 +130,10 @@ class Base(gym.Env):
 
         return observation_space
 
-    def _initialize_renderer(self, render_type: str):
-        if render_type == "observation":
+    def _initialize_renderer(self, renderer_type: str):
+        if renderer_type == "observation":
             model = self.model
-        elif render_type == "visualization":
+        elif renderer_type == "visualization":
             # HACK: gymnasium doesn't allow for custom size rendering on-the-fly, so we
             # initialize another renderer with appropriate size for visualization purposes
             # see https://gymnasium.farama.org/content/migration-guide/#environment-render
@@ -144,7 +144,7 @@ class Base(gym.Env):
             model.vis.global_.offheight = self.visualization_height
         else:
             raise ValueError(
-                f"Unknown render type {render_type}. Must be one of [observation, visualization]"
+                f"Unknown render type {renderer_type}. Must be one of [observation, visualization]"
             )
 
         return MujocoRenderer(model, self.data)
@@ -247,7 +247,7 @@ class Base(gym.Env):
     def get_obs(self):
         if self.obs_type == "state":
             return self._get_obs()
-        pixels = self._render(render_type="observation")
+        pixels = self._render(renderer=self.observation_renderer)
         if self.obs_type == "pixels":
             return pixels
         elif self.obs_type == "pixels_agent_pos":
@@ -322,20 +322,12 @@ class Base(gym.Env):
         self.data.qpos[12] = 0.0
 
     def render(self):
-        return self._render(render_type="visualization")
+        return self._render(renderer=self.visualization_renderer)
 
-    def _render(self, render_type):
+    def _render(self, renderer: MujocoRenderer):
         self._render_callback()
-        if render_type == "visualization":
-            render = self.visualization_renderer.render(self.render_mode, camera_name="camera0")
-            if self.render_mode != "human":
-                render = render.copy()
-        elif render_type == "observation":
-            render = self.observation_renderer.render("rgb_array", camera_name="camera0").copy()
-        else:
-            raise ValueError(render_type)
-
-        return render
+        render = renderer.render(self.render_mode, camera_name="camera0")
+        return render.copy() if render is not None else None
 
     def _render_callback(self):
         self._mujoco.mj_forward(self.model, self.data)
