@@ -3,7 +3,7 @@ import os
 import gymnasium as gym
 import mujoco
 import numpy as np
-from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
+from gymnasium.envs.mujoco.mujoco_rendering import _ALL_RENDERERS, MujocoRenderer
 from gymnasium_robotics.utils import mujoco_utils
 
 from gym_xarm.tasks import mocap
@@ -143,7 +143,7 @@ class Base(gym.Env):
         else:
             raise ValueError(f"Unknown renderer type {type}. Must be one of [observation, visualization]")
 
-        if os.environ.get("MUJOCO_GL") not in ["glfw", "egl", "osmesa"]:
+        if os.environ.get("MUJOCO_GL") not in _ALL_RENDERERS:
             os.environ["MUJOCO_GL"] = "egl"
 
         return MujocoRenderer(model, self.data)
