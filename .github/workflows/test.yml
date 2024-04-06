@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       POETRY_VERSION: 1.8.2
-      MUJOCO_GL: egl
     steps:
       #----------------------------------------------
       #       check-out repo and set-up python

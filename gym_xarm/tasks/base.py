@@ -143,6 +143,9 @@ class Base(gym.Env):
         else:
             raise ValueError(f"Unknown renderer type {type}. Must be one of [observation, visualization]")
 
+        if os.environ.get("MUJOCO_GL") not in ["glfw", "egl", "osmesa"]:
+            os.environ["MUJOCO_GL"] = "egl"
+
         return MujocoRenderer(model, self.data)
 
     @property
