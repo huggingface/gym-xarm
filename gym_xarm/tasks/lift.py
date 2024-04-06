@@ -47,22 +47,6 @@ class Lift(Base):
 
         return reach_reward / 100 + pick_reward
 
-    def get_obs(self):
-        if self.obs_type == "state":
-            return self._get_obs()
-        pixels = self.render()
-        if self.obs_type == "pixels":
-            return pixels
-        elif self.obs_type == "pixels_agent_pos":
-            return {
-                "pixels": pixels,
-                "agent_pos": self.robot_state,
-            }
-        else:
-            raise ValueError(
-                f"Unknown obs_type {self.obs_type}. Must be one of [pixels, state, pixels_agent_pos]"
-            )
-
     def _get_obs(self):
         return np.concatenate(
             [

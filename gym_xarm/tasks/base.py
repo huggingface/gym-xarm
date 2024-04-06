@@ -18,7 +18,7 @@ class Base(gym.Env):
     """
 
     metadata = {
-        "render_modes": [],
+        "render_modes": ["human", "rgb_array"],
         "render_fps": 25,
     }
     n_substeps = 20
@@ -30,12 +30,12 @@ class Base(gym.Env):
         self,
         task,
         obs_type="state",
+        render_mode="rgb_array",
         gripper_rotation=None,
         observation_width=84,
         observation_height=84,
         visualization_width=680,
         visualization_height=680,
-        channel_last=True,
     ):
         # Coordinates
         if gripper_rotation is None:
@@ -47,9 +47,9 @@ class Base(gym.Env):
 
         # Observations
         self.obs_type = obs_type
-        self.channel_last = channel_last
 
         # Rendering
+        self.render_mode = render_mode
         self.observation_width = observation_width
         self.observation_height = observation_height
         self.visualization_width = visualization_width
@@ -62,8 +62,8 @@ class Base(gym.Env):
 
         # Initialize sim, spaces & renderers
         self._initialize_simulation()
-        self.observation_renderer = self._initialize_renderer(type="observation")
-        self.visualization_renderer = self._initialize_renderer(type="visualization")
+        self.observation_renderer = self._initialize_renderer(render_type="observation")
+        self.visualization_renderer = self._initialize_renderer(render_type="visualization")
         self.observation_space = self._initialize_observation_space()
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(len(self.metadata["action_space"]),))
         self.action_padding = np.zeros(4 - len(self.metadata["action_space"]), dtype=np.float32)
@@ -102,11 +102,7 @@ class Base(gym.Env):
         mujoco.mj_forward(self.model, self.data)
 
     def _initialize_observation_space(self):
-        image_shape = (
-            (self.observation_height, self.observation_width, 3)
-            if self.channel_last
-            else (3, self.observation_height, self.observation_width)
-        )
+        image_shape = (self.observation_height, self.observation_width, 3)
         obs = self.get_obs()
         if self.obs_type == "state":
             observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype=np.float64)
@@ -128,10 +124,10 @@ class Base(gym.Env):
 
         return observation_space
 
-    def _initialize_renderer(self, type: str):
-        if type == "observation":
+    def _initialize_renderer(self, render_type: str):
+        if render_type == "observation":
             model = self.model
-        elif type == "visualization":
+        elif render_type == "visualization":
             # HACK: gymnasium doesn't allow for custom size rendering on-the-fly, so we
             # initialize another renderer with appropriate size for visualization purposes
             # see https://gymnasium.farama.org/content/migration-guide/#environment-render
@@ -141,7 +137,9 @@ class Base(gym.Env):
             model.vis.global_.offwidth = self.visualization_width
             model.vis.global_.offheight = self.visualization_height
         else:
-            raise ValueError(f"Unknown renderer type {type}. Must be one of [observation, visualization]")
+            raise ValueError(
+                f"Unknown render type {render_type}. Must be one of [observation, visualization]"
+            )
 
         if os.environ.get("MUJOCO_GL") not in _ALL_RENDERERS:
             os.environ["MUJOCO_GL"] = "egl"
@@ -196,9 +194,6 @@ class Base(gym.Env):
         """Samples a new goal and returns it."""
         raise NotImplementedError()
 
-    def get_obs(self):
-        raise NotImplementedError()
-
     def reset(
         self,
         *,
@@ -245,6 +240,22 @@ class Base(gym.Env):
 
         mujoco.mj_forward(self.model, self.data)
         return True
+
+    def get_obs(self):
+        if self.obs_type == "state":
+            return self._get_obs()
+        pixels = self._render(render_type="observation")
+        if self.obs_type == "pixels":
+            return pixels
+        elif self.obs_type == "pixels_agent_pos":
+            return {
+                "pixels": pixels,
+                "agent_pos": self.robot_state,
+            }
+        else:
+            raise ValueError(
+                f"Unknown obs_type {self.obs_type}. Must be one of [pixels, state, pixels_agent_pos]"
+            )
 
     def step(self, action):
         assert action.shape == (4,)
@@ -307,16 +318,19 @@ class Base(gym.Env):
         self.data.qpos[10] = 0.0
         self.data.qpos[12] = 0.0
 
-    def render(self, mode="rgb_array"):
-        self._render_callback()
-        if mode == "visualize":
-            return self.visualization_renderer.render("rgb_array", camera_name="camera0")
+    def render(self):
+        return self._render(render_type="visualization")
 
-        render = self.observation_renderer.render(mode, camera_name="camera0")
-        if self.channel_last:
-            return render.copy()
+    def _render(self, render_type):
+        self._render_callback()
+        if render_type == "visualization":
+            render = self.visualization_renderer.render(self.render_mode, camera_name="camera0")
+        elif render_type == "observation":
+            render = self.observation_renderer.render(self.render_mode, camera_name="camera0")
         else:
-            return render.transpose(2, 0, 1).copy()
+            raise ValueError(render_type)
+
+        return render.copy()
 
     def _render_callback(self):
         self._mujoco.mj_forward(self.model, self.data)
