@@ -4,6 +4,8 @@ from gym_xarm.tasks import Base
 
 
 class Reach(Base):
+    """DEPRECATED: use only Lift for now"""
+
     def __init__(self):
         super().__init__("reach")
 

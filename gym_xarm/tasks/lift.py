@@ -19,26 +19,6 @@ class Lift(Base):
     def z_target(self):
         return self._init_z + self._z_threshold
 
-    @property
-    def eef_velp(self):
-        return self._utils.get_site_xvelp(self.model, self.data, "grasp") * self.dt
-
-    @property
-    def obj_rot(self):
-        return self._utils.get_joint_qpos(self.model, self.data, "object_joint0")[-4:]
-
-    @property
-    def obj_velp(self):
-        return self._utils.get_site_xvelp(self.model, self.data, "object_site") * self.dt
-
-    @property
-    def obj_velr(self):
-        return self._utils.get_site_xvelr(self.model, self.data, "object_site") * self.dt
-
-    @property
-    def gripper_angle(self):
-        return self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
-
     def is_success(self):
         return self.obj[2] >= self.z_target
 
@@ -76,29 +56,19 @@ class Lift(Base):
         elif self.obs_type == "pixels_agent_pos":
             return {
                 "pixels": pixels,
-                "agent_pos": self._get_obs(agent_only=True),
+                "agent_pos": self.robot_state,
             }
         else:
             raise ValueError(
                 f"Unknown obs_type {self.obs_type}. Must be one of [pixels, state, pixels_agent_pos]"
             )
 
-    def _get_obs(self, agent_only=False):
-        eef = self.eef - self.center_of_table
-        if agent_only:
-            return np.concatenate(
-                [
-                    eef,
-                    self.gripper_angle,
-                ]
-            )
-
-        obj = self.obj - self.center_of_table
+    def _get_obs(self):
         return np.concatenate(
             [
-                eef,
+                self.eef,
                 self.eef_velp,
-                obj,
+                self.obj,
                 self.obj_rot,
                 self.obj_velp,
                 self.obj_velr,
@@ -106,10 +76,10 @@ class Lift(Base):
                 np.array(
                     [
                         np.linalg.norm(self.eef - self.obj),
-                        np.linalg.norm(eef[:-1] - obj[:-1]),
+                        np.linalg.norm(self.eef[:-1] - self.obj[:-1]),
                         self.z_target,
-                        self.z_target - obj[-1],
-                        self.z_target - eef[-1],
+                        self.z_target - self.obj[-1],
+                        self.z_target - self.eef[-1],
                     ]
                 ),
                 self.gripper_angle,

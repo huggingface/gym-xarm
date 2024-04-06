@@ -1,5 +1,4 @@
 import os
-from collections import deque
 
 import gymnasium as gym
 import mujoco
@@ -36,10 +35,9 @@ class Base(gym.Env):
         observation_height=84,
         visualization_width=680,
         visualization_height=680,
-        frame_stack=1,
         channel_last=True,
     ):
-        # Env setup
+        # Coordinates
         if gripper_rotation is None:
             gripper_rotation = [0, 1, 0, 0]
         self.gripper_rotation = np.array(gripper_rotation, dtype=np.float32)
@@ -56,8 +54,6 @@ class Base(gym.Env):
         self.observation_height = observation_height
         self.visualization_width = visualization_width
         self.visualization_height = visualization_height
-        self.frame_stack = frame_stack
-        self._frames = deque([], maxlen=frame_stack)
 
         # Assets
         self.xml_path = os.path.join(os.path.dirname(__file__), "assets", f"{task}.xml")
@@ -78,15 +74,6 @@ class Base(gym.Env):
 
         if "w" not in self.metadata["action_space"]:
             self.action_padding[-1] = 1.0
-
-        # super().__init__(
-        #     xml_path = os.path.join(os.path.dirname(__file__), "assets", f"{task}.xml"),
-        #     n_substeps=20,
-        #     n_actions=4,
-        #     initial_qpos={},
-        #     width=image_size,
-        #     height=image_size,
-        # )
 
     def _initialize_simulation(self):
         """Initialize MuJoCo simulation data structures mjModel and mjData."""
@@ -116,9 +103,9 @@ class Base(gym.Env):
 
     def _initialize_observation_space(self):
         image_shape = (
-            (self.observation_height, self.observation_width, 3 * self.frame_stack)
+            (self.observation_height, self.observation_width, 3)
             if self.channel_last
-            else (3 * self.frame_stack, self.observation_height, self.observation_width)
+            else (3, self.observation_height, self.observation_width)
         )
         obs = self.get_obs()
         if self.obs_type == "state":
@@ -145,7 +132,7 @@ class Base(gym.Env):
         if type == "observation":
             model = self.model
         elif type == "visualization":
-            # HACK: MujoCo doesn't allow for custom size rendering on-the-fly, so we
+            # HACK: gymnasium doesn't allow for custom size rendering on-the-fly, so we
             # initialize another renderer with appropriate size for visualization purposes
             # see https://gymnasium.farama.org/content/migration-guide/#environment-render
             from copy import deepcopy
@@ -165,16 +152,35 @@ class Base(gym.Env):
 
     @property
     def eef(self):
-        return self._utils.get_site_xpos(self.model, self.data, "grasp")
+        return self._utils.get_site_xpos(self.model, self.data, "grasp") - self.center_of_table
 
     @property
-    def obj(self):
-        return self._utils.get_site_xpos(self.model, self.data, "object_site")
+    def eef_velp(self):
+        return self._utils.get_site_xvelp(self.model, self.data, "grasp") * self.dt
+
+    @property
+    def gripper_angle(self):
+        return self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
 
     @property
     def robot_state(self):
-        gripper_angle = self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
-        return np.concatenate([self.eef, gripper_angle])
+        return np.concatenate([self.eef - self.center_of_table, self.gripper_angle])
+
+    @property
+    def obj(self):
+        return self._utils.get_site_xpos(self.model, self.data, "object_site") - self.center_of_table
+
+    @property
+    def obj_rot(self):
+        return self._utils.get_joint_qpos(self.model, self.data, "object_joint0")[-4:]
+
+    @property
+    def obj_velp(self):
+        return self._utils.get_site_xvelp(self.model, self.data, "object_site") * self.dt
+
+    @property
+    def obj_velr(self):
+        return self._utils.get_site_xvelr(self.model, self.data, "object_site") * self.dt
 
     def is_success(self):
         """Indicates whether or not the achieved goal successfully achieved the desired goal."""
@@ -237,14 +243,6 @@ class Base(gym.Env):
         mujoco.mj_forward(self.model, self.data)
         return True
 
-    # def reset(self, seed=None, options=None):
-    #     super().reset(seed=seed, options=options)
-    #     self._reset_sim()
-    #     observation = self._get_obs()
-    #     observation = self._transform_obs(observation)
-    #     info = {}
-    #     return observation, info
-
     def step(self, action):
         assert action.shape == (4,)
         assert self.action_space.contains(action), f"{action!r} ({type(action)}) invalid"
@@ -252,12 +250,11 @@ class Base(gym.Env):
         self._mujoco.mj_step(self.model, self.data, nstep=2)
         self._step_callback()
         observation = self.get_obs()
-        # observation = self._transform_obs(observation)
         reward = self.get_reward()
         terminated = is_success = self.is_success()
+        truncated = False
         info = {"is_success": is_success}
 
-        truncated = False
         return observation, reward, terminated, truncated, info
 
     def _step_callback(self):
@@ -307,40 +304,12 @@ class Base(gym.Env):
         self.data.qpos[10] = 0.0
         self.data.qpos[12] = 0.0
 
-    # def _transform_obs(self, obs, reset=False):
-    #     if self.obs_type == "state":
-    #         return obs["observation"]
-    #     elif self.obs_type == "rgb":
-    #         self._update_frames(reset=reset)
-    #         rgb_obs = np.concatenate(list(self._frames), axis=-1 if self.channel_last else 0)
-    #         return rgb_obs
-    #     elif self.obs_type == "all":
-    #         self._update_frames(reset=reset)
-    #         rgb_obs = np.concatenate(list(self._frames), axis=-1 if self.channel_last else 0)
-    #         return OrderedDict((("rgb", rgb_obs), ("state", self.robot_state)))
-    #     else:
-    #         raise ValueError(f"Unknown obs_type {self.obs_type}. Must be one of [rgb, all, state]")
-
-    # def _update_frames(self, reset=False):
-    #     pixels = self._render_obs()
-    #     self._frames.append(pixels)
-    #     if reset:
-    #         for _ in range(1, self.frame_stack):
-    #             self._frames.append(pixels)
-    #     assert len(self._frames) == self.frame_stack
-
-    # def _render_obs(self):
-    #     obs = self.render(mode="rgb_array")
-    #     if not self.channel_last:
-    #         obs = obs.transpose(2, 0, 1)
-    #     return obs.copy()
-
     def render(self, mode="rgb_array"):
         self._render_callback()
         if mode == "visualize":
             return self.visualization_renderer.render("rgb_array", camera_name="camera0")
 
-        render = self.observation_renderer.render("rgb_array", camera_name="camera0")
+        render = self.observation_renderer.render(mode, camera_name="camera0")
         if self.channel_last:
             return render.copy()
         else:
