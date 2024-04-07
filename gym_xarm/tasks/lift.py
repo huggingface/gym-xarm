@@ -48,38 +48,28 @@ class Lift(Base):
         return reach_reward / 100 + pick_reward
 
     def _get_obs(self):
-        eef_velp = self._utils.get_site_xvelp(self.model, self.data, "grasp") * self.dt
-        gripper_angle = self._utils.get_joint_qpos(self.model, self.data, "right_outer_knuckle_joint")
-        eef = self.eef - self.center_of_table
-
-        obj = self.obj - self.center_of_table
-        obj_rot = self._utils.get_joint_qpos(self.model, self.data, "object_joint0")[-4:]
-        obj_velp = self._utils.get_site_xvelp(self.model, self.data, "object_site") * self.dt
-        obj_velr = self._utils.get_site_xvelr(self.model, self.data, "object_site") * self.dt
-
-        obs = np.concatenate(
+        return np.concatenate(
             [
-                eef,
-                eef_velp,
-                obj,
-                obj_rot,
-                obj_velp,
-                obj_velr,
-                eef - obj,
+                self.eef,
+                self.eef_velp,
+                self.obj,
+                self.obj_rot,
+                self.obj_velp,
+                self.obj_velr,
+                self.eef - self.obj,
                 np.array(
                     [
-                        np.linalg.norm(eef - obj),
-                        np.linalg.norm(eef[:-1] - obj[:-1]),
+                        np.linalg.norm(self.eef - self.obj),
+                        np.linalg.norm(self.eef[:-1] - self.obj[:-1]),
                         self.z_target,
-                        self.z_target - obj[-1],
-                        self.z_target - eef[-1],
+                        self.z_target - self.obj[-1],
+                        self.z_target - self.eef[-1],
                     ]
                 ),
-                gripper_angle,
+                self.gripper_angle,
             ],
             axis=0,
         )
-        return {"observation": obs, "state": eef, "achieved_goal": eef, "desired_goal": eef}
 
     def _sample_goal(self):
         # Gripper
@@ -98,9 +88,13 @@ class Lift(Base):
         # Goal
         return object_pos + np.array([0, 0, self._z_threshold])
 
-    def reset(self, seed=None, options=None):
+    def reset(
+        self,
+        seed=None,
+        options: dict | None = None,
+    ):
         self._action = np.zeros(4)
-        return super().reset(seed, options)
+        return super().reset(seed=seed, options=options)
 
     def step(self, action):
         self._action = action.copy()
