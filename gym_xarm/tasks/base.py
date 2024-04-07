@@ -216,7 +216,7 @@ class Base(gym.Env):
             options (optional dictionary): Can be used when `reset` is override for additional information to specify how the environment is reset.
 
         Returns:
-            observation (dictionary) : Observation of the initial state. It should satisfy the `GoalEnv` :attr:`observation_space`.
+            observation (dictionary) : Observation of the initial state.
             info (dictionary): This dictionary contains auxiliary information complementing ``observation``. It should be analogous to
                 the ``info`` returned by :meth:`step`.
         """
