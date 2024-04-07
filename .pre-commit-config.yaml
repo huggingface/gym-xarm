@@ -1,4 +1,4 @@
-exclude: ^(data/|tests/|example.py)
+exclude: ^(example.py)
 default_language_version:
     python: python3.10
 repos:
