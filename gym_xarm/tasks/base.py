@@ -238,10 +238,8 @@ class Base(gym.Env):
         self.data.time = self.initial_time
         self.data.qpos[:] = np.copy(self.initial_qpos)
         self.data.qvel[:] = np.copy(self.initial_qvel)
-        if self.model.na != 0:
-            self.data.act[:] = None
-
-        mujoco.mj_forward(self.model, self.data)
+        self._sample_goal()
+        self._mujoco.mj_step(self.model, self.data, nstep=10)
         return True
 
     def get_obs(self):
@@ -306,13 +304,6 @@ class Base(gym.Env):
             self.data,
             np.concatenate([pos_ctrl, self.gripper_rotation, gripper_ctrl]),
         )
-
-        self.data.time = self.initial_time
-        self.data.qpos[:] = np.copy(self.initial_qpos)
-        self.data.qvel[:] = np.copy(self.initial_qvel)
-        self._sample_goal()
-        self._mujoco.mj_step(self.model, self.data, nstep=10)
-        return True
 
     def _set_gripper(self, gripper_pos, gripper_rotation):
         self._utils.set_mocap_pos(self.model, self.data, "robot0:mocap", gripper_pos)
