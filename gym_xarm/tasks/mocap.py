@@ -19,25 +19,8 @@ def apply_action(model, model_names, data, action):
 def reset(model, data):
     if model.nmocap > 0 and model.eq_data is not None:
         for i in range(model.eq_data.shape[0]):
-            # if sim.model.eq_type[i] == mujoco_py.const.EQ_WELD:
             if model.eq_type[i] == mujoco.mjtEq.mjEQ_WELD:
-                # model.eq_data[i, :] = np.array([0., 0., 0., 1., 0., 0., 0.])
-                model.eq_data[i, :] = np.array(
-                    [
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        1.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                    ]
-                )
-    # sim.forward()
+                model.eq_data[i, :8] = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0])
     mujoco.mj_forward(model, data)
 
 

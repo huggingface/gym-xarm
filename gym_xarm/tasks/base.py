@@ -306,8 +306,8 @@ class Base(gym.Env):
         )
 
     def _set_gripper(self, gripper_pos, gripper_rotation):
-        self._utils.set_mocap_pos(self.model, self.data, "robot0:mocap", gripper_pos)
-        self._utils.set_mocap_quat(self.model, self.data, "robot0:mocap", gripper_rotation)
+        self._utils.set_mocap_pos(self.model, self.data, "robot0:mocap2", gripper_pos)
+        self._utils.set_mocap_quat(self.model, self.data, "robot0:mocap2", gripper_rotation)
         self._utils.set_joint_qpos(self.model, self.data, "right_outer_knuckle_joint", 0)
         self.data.qpos[10] = 0.0
         self.data.qpos[12] = 0.0
