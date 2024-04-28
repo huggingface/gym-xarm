@@ -78,8 +78,8 @@ class Lift(Base):
 
         # Object
         object_pos = self.center_of_table - np.array([0.15, 0.10, 0.07])
-        object_pos[0] += self.np_random.uniform(-0.05, 0.05, size=1)
-        object_pos[1] += self.np_random.uniform(-0.05, 0.05, size=1)
+        object_pos[0] += self.np_random.uniform(-0.05, 0.05)
+        object_pos[1] += self.np_random.uniform(-0.05, 0.05)
         object_qpos = self._utils.get_joint_qpos(self.model, self.data, "object_joint0")
         object_qpos[:3] = object_pos
         self._utils.set_joint_qpos(self.model, self.data, "object_joint0", object_qpos)
