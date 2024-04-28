@@ -111,7 +111,7 @@ class Base(gym.Env):
         image_shape = (self.observation_height, self.observation_width, 3)
         obs = self.get_obs()
         if self.obs_type == "state":
-            observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype=np.float64)
+            observation_space = gym.spaces.Box(-1000.0, 1000.0, shape=obs.shape, dtype=np.float64)
         elif self.obs_type == "pixels":
             observation_space = gym.spaces.Box(low=0, high=255, shape=image_shape, dtype=np.uint8)
         elif self.obs_type == "pixels_agent_pos":
@@ -119,7 +119,7 @@ class Base(gym.Env):
                 {
                     "pixels": gym.spaces.Box(low=0, high=255, shape=image_shape, dtype=np.uint8),
                     "agent_pos": gym.spaces.Box(
-                        low=-np.inf, high=np.inf, shape=obs["agent_pos"].shape, dtype=np.float64
+                        low=-1000.0, high=1000.0, shape=obs["agent_pos"].shape, dtype=np.float64
                     ),
                 }
             )
