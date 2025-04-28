@@ -147,7 +147,24 @@ class Base(gym.Env):
                 f"Unknown render type {renderer_type}. Must be one of [observation, visualization]"
             )
 
-        return MujocoRenderer(model, self.data)
+        # Gymnasium's MujocoRenderer (v1.0+) expects explicit width and height when the render
+        # mode is not "human". In addition, the camera can be specified during construction
+        # instead of at every render call. Providing these parameters here ensures that later
+        # calls to `renderer.render` work for both "human" and off-screen modes without the need
+        # for extra keyword arguments.
+
+        if renderer_type == "observation":
+            width, height = self.observation_width, self.observation_height
+        else:  # visualization renderer
+            width, height = self.visualization_width, self.visualization_height
+
+        return MujocoRenderer(
+            model,
+            self.data,
+            width=width,
+            height=height,
+            camera_name="camera0",
+        )
 
     @property
     def dt(self):
@@ -317,7 +334,7 @@ class Base(gym.Env):
 
     def _render(self, renderer: MujocoRenderer):
         self._render_callback()
-        render = renderer.render(self.render_mode, camera_name="camera0")
+        render = renderer.render(self.render_mode)
         return render.copy() if render is not None else None
 
     def _render_callback(self):
