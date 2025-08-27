@@ -19,6 +19,7 @@ elif os.environ.get("MUJOCO_GL") not in _ALL_RENDERERS:
 # so we detect the gymnasium version used to use the appropriate API
 _GYM_IS_HIGHER_OR_EQUAL_1_0_0 = not gym.__version__.startswith("0.")
 
+
 class Base(gym.Env):
     """
     Superclass for all gym-xarm environments.
@@ -158,7 +159,9 @@ class Base(gym.Env):
             else:
                 renderer_width = self.visualization_width
                 renderer_height = self.visualization_height
-            return MujocoRenderer(model, self.data, camera_name="camera0", width=renderer_width, height=renderer_height)
+            return MujocoRenderer(
+                model, self.data, camera_name="camera0", width=renderer_width, height=renderer_height
+            )
         else:
             return MujocoRenderer(model, self.data)
 
