@@ -23,7 +23,7 @@ packages = [{include = "gym_xarm"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-mujoco = "^2.3.7"
+mujoco = ">=2.3.7"
 gymnasium = ">=0.29.1"
 gymnasium-robotics = ">=1.2.4"
 pre-commit = {version = ">=3.7.0", optional = true}
