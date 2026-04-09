@@ -83,10 +83,12 @@ class Lift(Base):
         object_qpos = self._utils.get_joint_qpos(self.model, self.data, "object_joint0")
         object_qpos[:3] = object_pos
         self._utils.set_joint_qpos(self.model, self.data, "object_joint0", object_qpos)
-        self._init_z = object_pos[2]
+
+        object_pos_on_table = object_pos - self.center_of_table
+        self._init_z = object_pos_on_table[2]
 
         # Goal
-        return object_pos + np.array([0, 0, self._z_threshold])
+        return object_pos_on_table + np.array([0, 0, self._z_threshold])
 
     def reset(
         self,
