@@ -14,6 +14,11 @@ if os.environ.get("MUJOCO_GL") == "glfw":
 elif os.environ.get("MUJOCO_GL") not in _ALL_RENDERERS:
     os.environ["MUJOCO_GL"] = "egl"
 
+# The MujocoRenderer API changed in gymnasium v1.0.0,
+# see https://github.com/Farama-Foundation/Gymnasium/pull/868,
+# so we detect the gymnasium version used to use the appropriate API
+_GYM_IS_HIGHER_OR_EQUAL_1_0_0 = not gym.__version__.startswith("0.")
+
 
 class Base(gym.Env):
     """
@@ -147,7 +152,18 @@ class Base(gym.Env):
                 f"Unknown render type {renderer_type}. Must be one of [observation, visualization]"
             )
 
-        return MujocoRenderer(model, self.data)
+        if _GYM_IS_HIGHER_OR_EQUAL_1_0_0:
+            if renderer_type == "observation":
+                renderer_width = self.observation_width
+                renderer_height = self.observation_height
+            else:
+                renderer_width = self.visualization_width
+                renderer_height = self.visualization_height
+            return MujocoRenderer(
+                model, self.data, camera_name="camera0", width=renderer_width, height=renderer_height
+            )
+        else:
+            return MujocoRenderer(model, self.data)
 
     @property
     def dt(self):
@@ -317,7 +333,10 @@ class Base(gym.Env):
 
     def _render(self, renderer: MujocoRenderer):
         self._render_callback()
-        render = renderer.render(self.render_mode, camera_name="camera0")
+        if _GYM_IS_HIGHER_OR_EQUAL_1_0_0:
+            render = renderer.render(self.render_mode)
+        else:
+            render = renderer.render(self.render_mode, camera_name="camera0")
         return render.copy() if render is not None else None
 
     def _render_callback(self):
